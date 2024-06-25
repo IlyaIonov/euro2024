@@ -5,6 +5,9 @@ from datetime import datetime, timedelta
 from collections import defaultdict
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, KeyboardButton
 from telegram.ext import Updater, CommandHandler, CallbackQueryHandler, MessageHandler, Filters, ConversationHandler
+from telegram import ParseMode
+
+MAX_MESSAGE_LENGTH = 4096
 
 # Логирование
 logging.basicConfig(
@@ -276,6 +279,31 @@ def results(update: Update, context):
     reply_markup = InlineKeyboardMarkup(keyboard)
     update.message.reply_text('Выберите опцию:', reply_markup=reply_markup)
 
+
+def split_message(text):
+    """
+    Split a long message into chunks of at most MAX_MESSAGE_LENGTH.
+    """
+    if len(text) <= MAX_MESSAGE_LENGTH:
+        return [text]
+
+    lines = text.split('\n')
+    messages = []
+    current_message = ""
+
+    for line in lines:
+        if len(current_message) + len(line) + 1 <= MAX_MESSAGE_LENGTH:
+            current_message += line + '\n'
+        else:
+            messages.append(current_message)
+            current_message = line + '\n'
+
+    if current_message:
+        messages.append(current_message)
+
+    return messages
+
+
 def all_results(update: Update, context):
     query = update.callback_query
     query.answer()
@@ -289,6 +317,7 @@ def all_results(update: Update, context):
     """)
     votes = cursor.fetchall()
     conn.close()
+
     if votes:
         results_text = "Результаты голосования:\n\n"
         for team1, team2, vote, first_name, last_name in votes:
@@ -296,7 +325,10 @@ def all_results(update: Update, context):
             vote_result = vote if vote != "draw" else "Ничья"
             user_name = f"{first_name} {last_name}" if first_name and last_name else "Неизвестный пользователь"
             results_text += f"Матч: {match}, Голос: {vote_result}, Пользователь: {user_name}\n"
-        query.edit_message_text(results_text)
+
+        messages = split_message(results_text)
+        for message in messages:
+            query.message.reply_text(message, parse_mode=ParseMode.HTML)
     else:
         query.edit_message_text("Результаты голосования отсутствуют.")
 
