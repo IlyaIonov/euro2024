@@ -6,26 +6,19 @@ from collections import defaultdict
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, KeyboardButton
 from telegram.ext import Updater, CommandHandler, CallbackQueryHandler, MessageHandler, Filters, ConversationHandler
 
-# Логирование
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s',
     level=logging.INFO
 )
 logger = logging.getLogger(__name__)
-
-# Получаем токен бота из переменной окружения
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 
 if not TOKEN:
     raise ValueError("TELEGRAM_BOT_TOKEN is not set")
 
-# Путь к базе данных
 db_path = '/app/data/euro2024.db'
-
-# Создаем директорию для базы данных, если она не существует
 os.makedirs(os.path.dirname(db_path), exist_ok=True)
 
-# Создаем и инициализируем базу данных SQLite
 def init_db():
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
@@ -34,7 +27,6 @@ def init_db():
     cursor.execute('''CREATE TABLE IF NOT EXISTS votes (user_id INTEGER, match_id INTEGER, vote TEXT, username TEXT, first_name TEXT, last_name TEXT)''')
     cursor.execute('''CREATE TABLE IF NOT EXISTS matches (match_id INTEGER PRIMARY KEY AUTOINCREMENT, team1 TEXT, team2 TEXT, match_date TEXT)''')
 
-    # Проверка и добавление столбцов в таблицу users, если они не существуют
     cursor.execute("PRAGMA table_info(users)")
     columns = [info[1] for info in cursor.fetchall()]
     if 'first_name' not in columns:
@@ -42,7 +34,6 @@ def init_db():
     if 'last_name' not in columns:
         cursor.execute("ALTER TABLE users ADD COLUMN last_name TEXT")
 
-    # Проверка и добавление столбцов в таблицу votes, если они не существуют
     cursor.execute("PRAGMA table_info(votes)")
     columns = [info[1] for info in cursor.fetchall()]
     if 'first_name' not in columns:
@@ -58,10 +49,8 @@ try:
 except sqlite3.OperationalError as e:
     logger.error(f"Ошибка инициализации базы данных: {e}")
 
-# Этапы диалога
 FIRST_NAME, LAST_NAME, USER_RESULTS = range(3)
 
-# Функция для начала работы
 def start(update: Update, context):
     logger.info(f"User {update.message.from_user.username} started the bot.")
     update.message.reply_text("Привет! Пожалуйста, введи свое имя:")
@@ -190,7 +179,6 @@ def button_vote_result(update: Update, context):
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
 
-    # Проверяем, голосовал ли пользователь уже за этот матч сегодня
     cursor.execute("SELECT COUNT(*) FROM votes WHERE user_id=? AND match_id=? AND vote_date=date('now')", (user_id, match_id))
     vote_count = cursor.fetchone()[0]
 
@@ -210,7 +198,6 @@ def button_vote_result(update: Update, context):
                 (user_id, username, first_name, last_name, match_id, vote))
             conn.commit()
 
-            # Изменяем вывод текста результата голосования
             if vote == "draw":
                 vote_result = "Ничья"
             else:
@@ -236,7 +223,6 @@ def standings(update: Update, context):
     else:
         update.message.reply_text("Турнирная таблица пуста.")
 
-# Функция для получения турнирной таблицы с группировкой по группам
 def get_grouped_standings():
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
@@ -253,7 +239,6 @@ def get_grouped_standings():
 
     return grouped_standings
 
-# Функция для отображения турнирной таблицы
 def show_standings(update, context):
     grouped_standings = get_grouped_standings()
 
@@ -373,7 +358,6 @@ def main():
     updater = Updater(TOKEN, use_context=True)
     dispatcher = updater.dispatcher
 
-    # ConversationHandler для ввода имени и фамилии
     conv_handler = ConversationHandler(
         entry_points=[CommandHandler('start', start)],
         states={
@@ -393,7 +377,6 @@ def main():
     dispatcher.add_handler(CommandHandler("matches", matches))
     dispatcher.add_handler(CallbackQueryHandler(all_results, pattern="all_results"))
 
-    # ConversationHandler для ввода имени и фамилии пользователя и отображения результатов голосования
     user_results_handler = ConversationHandler(
         entry_points=[CallbackQueryHandler(user_results_start, pattern="user_results")],
         states={
